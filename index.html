@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>VeloTrack Pro</title>
+  
+  <meta name="theme-color" content="#020617">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2972/2972185.png">
+
+  <!-- Tailwind CSS & Chart.js & Lucide -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- SDKs de Firebase Compatibles -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    .fade-transicion {
+      transition: opacity 0.4s ease-in-out, filter 0.4s ease-in-out, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .fade-out {
+      opacity: 0.15;
+      filter: blur(4px);
+      transform: scale(0.92);
+    }
+    .fade-in {
+      opacity: 1;
+      filter: blur(0px);
+      transform: scale(1);
+    }
+    .circle-progress {
+      transition: stroke-dashoffset 0.25s linear, stroke 0.4s ease;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+    }
+    .ciclista-runner {
+      transition: left 0.3s linear;
+    }
+    .fill-total-runner {
+      transition: width 0.3s linear;
+    }
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { 
+      -webkit-appearance: none; 
+      margin: 0; 
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans pb-24 antialiased select-none">
+
+  <!-- PANTALLA ONBOARDING (SOLO NUEVOS) -->
+  <div id="pantalla-login" class="fixed inset-0 z-50 bg-slate-950 flex flex-col justify-center px-6 max-w-md mx-auto hidden">
+    <div class="space-y-6">
+      <div class="text-center space-y-2">
+        <div class="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-3xl mx-auto flex items-center justify-center border border-emerald-500/20 shadow-xl shadow-emerald-500/10">
+          <i data-lucide="bike" class="w-8 h-8"></i>
+        </div>
+        <h1 class="text-2xl font-black tracking-tight text-white">VeloTrack</h1>
+        <p class="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
+          Ingresa tus datos básicos para calibrar tu entrenamiento y sincronizar en la nube:
+        </p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3.5 shadow-2xl">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">¿Cómo te llamas?</label>
+          <input type="text" id="login-nombre" placeholder="Tu nombre" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:border-emerald-400 focus:outline-none" />
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-300 mb-1">Peso (kg):</label>
+            <input type="number" id="login-peso" placeholder="75" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-emerald-400 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-300 mb-1">Altura (cm):</label>
+            <input type="number" id="login-altura" placeholder="172" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-emerald-400 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-300 mb-1">Cintura (cm):</label>
+            <input type="number" id="login-cintura" placeholder="84" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-emerald-400 focus:outline-none" />
+          </div>
+        </div>
+
+        <button onclick="completarRegistroInicial()" class="w-full py-3.5 bg-emerald-500 active:bg-emerald-600 text-slate-950 font-bold text-sm rounded-xl transition shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2 mt-2">
+          <span>Comenzar a Entrenar</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APLICACIÓN PRINCIPAL -->
+  <div id="pantalla-app" class="hidden">
+    <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <button onclick="abrirModalPerfil()" class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 active:scale-95 transition">
+          <i data-lucide="bike" class="w-5 h-5"></i>
+        </button>
+        <div>
+          <h1 class="text-base font-bold text-white flex items-center gap-1.5 leading-none">
+            VeloTrack <span id="badge-cloud" class="text-[9px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded font-mono font-bold flex items-center gap-1"><i data-lucide="cloud" class="w-2.5 h-2.5"></i> CLOUD</span>
+          </h1>
+          <p id="header-user-badge" class="text-[11px] text-slate-400 mt-0.5">Hola</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button onclick="toggleAudio()" id="btn-audio" class="p-2 bg-slate-800 text-emerald-400 rounded-xl border border-slate-700 active:scale-95 transition" title="Sonido">
+          <i data-lucide="volume-2" class="w-4 h-4" id="icon-audio"></i>
+        </button>
+        <button onclick="abrirGuia()" class="p-2 bg-slate-800 text-amber-400 rounded-xl border border-slate-700 active:scale-95 transition">
+          <i data-lucide="help-circle" class="w-4 h-4"></i>
+        </button>
+        <button onclick="pedirConfirmacionReset()" class="text-xs bg-slate-800 text-slate-300 px-2.5 py-2 rounded-xl border border-slate-700 active:scale-95 transition font-medium">
+          Reset
+        </button>
+      </div>
+    </header>
+
+    <!-- VISTA 1: ENTRENAR -->
+    <main id="vista-entrenar" class="p-4 space-y-4 max-w-md mx-auto">
+      
+      <!-- KPIs Semanales -->
+      <section class="grid grid-cols-3 gap-2">
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col justify-between">
+          <span class="text-[11px] text-slate-400 font-medium">Minutos</span>
+          <div class="mt-1">
+            <span id="kpi-min" class="text-lg font-bold text-cyan-400">0</span>
+            <span id="kpi-meta-min" class="text-[10px] text-slate-500 font-mono">/ 110</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+            <div id="prog-min" class="bg-cyan-400 h-full w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col justify-between">
+          <span class="text-[11px] text-slate-400 font-medium">Distancia</span>
+          <div class="mt-1">
+            <span id="kpi-km" class="text-lg font-bold text-emerald-400">0.0</span>
+            <span class="text-[10px] text-slate-500 font-mono">km</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+            <div id="prog-km" class="bg-emerald-400 h-full w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col justify-between">
+          <span class="text-[11px] text-slate-400 font-medium">Calorías</span>
+          <div class="mt-1">
+            <span id="kpi-cal" class="text-lg font-bold text-amber-400">0</span>
+            <span class="text-[10px] text-slate-500 font-mono">kcal</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+            <div id="prog-cal" class="bg-amber-400 h-full w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONSOLA EN VIVO AUTOMÁTICA -->
+      <section class="bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-5 text-center shadow-xl relative overflow-hidden">
+        
+        <div class="flex justify-between items-center mb-2">
+          <div class="flex items-center gap-1.5">
+            <span id="badge-modo-auto" class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              Auto-Pilot
+            </span>
+            <span id="lbl-bloque-num" class="text-[11px] text-slate-400 font-mono">Fase 1/4</span>
+          </div>
+          <span class="text-xs text-slate-400 font-mono flex items-center gap-1">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i> <span id="lbl-rpm">75</span> RPM
+          </span>
+        </div>
+
+        <div id="box-proximo-cambio" class="bg-slate-950/70 border border-slate-800/80 rounded-xl px-3 py-1.5 mb-2 flex items-center justify-between text-xs">
+          <span class="text-slate-400 flex items-center gap-1.5">
+            <i data-lucide="clock" class="w-3.5 h-3.5 text-cyan-400"></i> Siguiente fase:
+          </span>
+          <span id="lbl-siguiente-info" class="font-semibold text-slate-200">Firme (en 5:00)</span>
+        </div>
+
+        <!-- Reloj circular con línea fluida de la fase activa -->
+        <div class="relative w-48 h-48 mx-auto my-2 flex items-center justify-center">
+          <svg class="w-full h-full" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="44" stroke="#1e293b" stroke-width="4.5" fill="none"/>
+            <circle id="circle-progress-bar" class="circle-progress" cx="50" cy="50" r="44" stroke="#34d399" stroke-width="5" stroke-linecap="round" fill="none" stroke-dasharray="276.46" stroke-dashoffset="0"/>
+          </svg>
+
+          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div id="contenedor-ilustracion" class="w-12 h-12 flex items-center justify-center fade-transicion fade-in"></div>
+            <span id="timer-display" class="text-4xl font-black tracking-tight font-mono text-white leading-none mt-1">00:00</span>
+            <span id="lbl-sensacion" class="text-[11px] text-emerald-400 mt-1 font-medium transition-colors duration-500">Pedaleo Suave</span>
+          </div>
+        </div>
+
+        <!-- RUTA TOTAL CON CICLISTA DINÁMICO -->
+        <div class="space-y-1 mt-3 mb-4">
+          <div class="flex justify-between items-center text-[11px] font-mono text-slate-400 px-1">
+            <span class="flex items-center gap-1">
+              <i data-lucide="map-pin" class="w-3 h-3 text-cyan-400"></i>
+              <span>Ruta de la Sesión</span>
+            </span>
+            <span id="lbl-pct-total" class="font-bold text-white">0%</span>
+          </div>
+
+          <div class="relative pt-6 pb-1">
+            <div id="ciclista-icono" class="ciclista-runner absolute top-0 -translate-x-1/2 flex flex-col items-center pointer-events-none" style="left: 0%;">
+              <div class="bg-cyan-500 text-slate-950 p-1 rounded-full shadow-lg shadow-cyan-500/50">
+                <i data-lucide="bike" class="w-3.5 h-3.5"></i>
+              </div>
+              <div class="w-0.5 h-1.5 bg-cyan-400"></div>
+            </div>
+
+            <div class="relative w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800 flex">
+              <div id="segmentos-etapas-fondo" class="absolute inset-0 flex h-full w-full"></div>
+              <div id="fill-recorrido-total" class="fill-total-runner absolute inset-y-0 left-0 bg-white/20 backdrop-brightness-150 border-r border-white/60 pointer-events-none" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div id="leyenda-etapas-marcas" class="flex justify-between text-[9px] text-slate-500 font-mono px-0.5"></div>
+        </div>
+
+        <!-- Botones de Control -->
+        <div class="space-y-2">
+          <div class="grid grid-cols-3 gap-2">
+            <button id="btn-toggle" onclick="toggleTimer()" class="col-span-2 py-3.5 bg-emerald-500 active:bg-emerald-600 text-slate-950 font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition active:scale-95">
+              <i data-lucide="play" id="icon-toggle" class="w-5 h-5 fill-current"></i>
+              <span id="text-toggle">INICIAR SESIÓN</span>
+            </button>
+            <button onclick="abrirModalGuardar()" class="py-3.5 bg-cyan-600 active:bg-cyan-700 text-white font-semibold rounded-2xl flex items-center justify-center gap-1.5 border border-cyan-500/30 active:scale-95 transition">
+              <i data-lucide="check" class="w-4 h-4"></i> Guardar
+            </button>
+          </div>
+
+          <button id="btn-cancelar" onclick="pedirConfirmacionCancelar()" class="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold rounded-xl border border-rose-500/20 active:scale-95 transition hidden flex items-center justify-center gap-1.5">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Descartar y volver a 00:00
+          </button>
+        </div>
+      </section>
+
+      <!-- Rutina del Día -->
+      <section class="space-y-2">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Plan Semanal</h2>
+          <span class="text-[11px] text-cyan-400">Toca el día</span>
+        </div>
+
+        <div id="dias-contenedor" class="grid grid-cols-7 gap-1"></div>
+
+        <div id="detalle-dia" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 mt-2 space-y-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <h3 id="det-titulo" class="font-bold text-white text-sm">Cargando día...</h3>
+              <p id="det-desc" class="text-xs text-slate-400 mt-0.5"></p>
+            </div>
+            <span id="det-estado" class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+              Pendiente
+            </span>
+          </div>
+
+          <div class="space-y-1.5 pt-1">
+            <span class="text-[11px] text-slate-400 font-semibold block">Secuencia Programada:</span>
+            <div id="det-secuencia-fases" class="grid grid-cols-1 gap-1.5 text-xs"></div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 text-xs bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 mt-2">
+            <div>
+              <span class="text-slate-500 block text-[10px]">Realizado:</span>
+              <span id="det-hecho-min" class="font-bold text-cyan-400 font-mono">0 min</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block text-[10px]">Distancia:</span>
+              <span id="det-hecho-km" class="font-bold text-emerald-400 font-mono">0.0 km</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block text-[10px]">Calorías:</span>
+              <span id="det-hecho-cal" class="font-bold text-amber-400 font-mono">0 kcal</span>
+            </div>
+          </div>
+
+          <button onclick="alternarDescanso()" id="btn-toggle-descanso" class="w-full py-2 bg-slate-800 active:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="coffee" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span id="lbl-btn-descanso">Marcar como Descanso</span>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <!-- VISTA 2: PROGRESO Y NUBE -->
+    <main id="vista-estadisticas" class="p-4 space-y-4 max-w-md mx-auto hidden">
+      <section id="card-evolucion" class="bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/30 p-4 rounded-3xl space-y-2.5">
+        <div class="flex items-center gap-2">
+          <div class="p-2 bg-amber-500/20 text-amber-400 rounded-xl">
+            <i data-lucide="award" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Evaluación Continua</h3>
+            <p id="txt-estado-evolucion" class="text-[11px] text-slate-400">Adaptación en progreso</p>
+          </div>
+        </div>
+        <p id="msg-evolucion" class="text-xs text-slate-300 leading-relaxed">
+          Alcanza el 85% de tu plan para desbloquear la fase de mayor resistencia.
+        </p>
+        <button id="btn-ascender" onclick="ascenderNivel()" class="w-full py-2.5 bg-gradient-to-r from-amber-500 to-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition active:scale-95 hidden">
+          ¡Avanzar a Nivel 2: Constante! 🚀
+        </button>
+      </section>
+
+      <!-- Historial en Firestore en Tiempo Real -->
+      <section class="bg-slate-900 border border-slate-800 p-4 rounded-3xl space-y-3">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="cloud" class="w-4 h-4 text-cyan-400"></i>
+            Historial en Firebase Cloud
+          </h3>
+          <span id="estado-conexion-cloud" class="text-[10px] text-emerald-400 font-mono">Conectado</span>
+        </div>
+
+        <div id="lista-firestore" class="space-y-1.5 max-h-48 overflow-y-auto text-xs pr-1">
+          <span class="text-slate-500 italic text-[11px]">Sincronizando con Firestore...</span>
+        </div>
+      </section>
+
+      <section class="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 p-4 rounded-3xl space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+              <i data-lucide="shield-check" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-sm text-white" id="stat-perfil-nombre">Mi Condición</h3>
+              <p class="text-[11px] text-slate-400">Salud Cardiovascular</p>
+            </div>
+          </div>
+          <button onclick="abrirModalPerfil()" class="text-xs text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-500/20 font-medium">
+            Editar
+          </button>
+        </div>
+
+        <div class="bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 space-y-2">
+          <div class="flex justify-between items-center text-xs">
+            <span class="text-slate-300">Ratio Cintura / Estatura:</span>
+            <span id="stat-ratio-cintura" class="font-mono font-bold text-emerald-400">0.48</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            <i data-lucide="info" class="w-3.5 h-3.5 inline text-cyan-400"></i> Tu cintura debe ser menor a la mitad de tu altura para un corazón seguro.
+          </p>
+        </div>
+      </section>
+
+      <section class="bg-slate-900 border border-slate-800 p-4 rounded-3xl space-y-3">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="bar-chart-2" class="w-4 h-4 text-cyan-400"></i>
+            Minutos Pedaleados
+          </h3>
+          <span class="text-[10px] text-slate-500 font-mono">Semana actual</span>
+        </div>
+        <div class="h-48 w-full">
+          <canvas id="chartProgreso"></canvas>
+        </div>
+      </section>
+    </main>
+
+    <!-- NAVEGACIÓN INFERIOR -->
+    <nav class="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-8 py-2.5 flex justify-around items-center max-w-md mx-auto">
+      <button onclick="cambiarPestana('entrenar')" id="tab-btn-entrenar" class="flex flex-col items-center gap-1 text-cyan-400 transition active:scale-95">
+        <i data-lucide="bike" class="w-5 h-5"></i>
+        <span class="text-[10px] font-semibold tracking-wider">PEDALEAR</span>
+      </button>
+      <button onclick="cambiarPestana('estadisticas')" id="tab-btn-estadisticas" class="flex flex-col items-center gap-1 text-slate-400 transition active:scale-95">
+        <i data-lucide="trending-up" class="w-5 h-5"></i>
+        <span class="text-[10px] font-semibold tracking-wider">MI PROGRESO</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- MODAL: GUARDAR SESIÓN -->
+  <div id="modal-guardar" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="font-bold text-white text-base flex items-center gap-2">
+          <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+          Validar Sesión
+        </h3>
+        <button onclick="cerrarModalGuardar()" class="text-slate-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-400">
+        Revisa o ajusta según lo que marcó el tacómetro de tu bicicleta:
+      </p>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Minutos pedaleados:</label>
+          <input type="number" id="input-modal-min" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-cyan-400 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Distancia (km):</label>
+          <input type="number" step="0.1" id="input-modal-km" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-emerald-400 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Calorías (kcal):</label>
+          <input type="number" id="input-modal-cal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-amber-400 focus:outline-none" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-2">
+        <button onclick="cerrarModalGuardar()" class="py-2.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700">
+          Volver
+        </button>
+        <button onclick="confirmarGuardado()" class="py-2.5 bg-emerald-500 text-slate-950 text-xs font-bold rounded-xl active:bg-emerald-600 transition flex items-center justify-center gap-1.5">
+          <i data-lucide="cloud-upload" class="w-4 h-4"></i> Guardar en Nube
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR PERFIL -->
+  <div id="modal-perfil" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="font-bold text-white text-base flex items-center gap-2">
+          <i data-lucide="user-check" class="w-4 h-4 text-emerald-400"></i>
+          Mis Datos de Perfil
+        </h3>
+        <button onclick="cerrarModalPerfil()" class="text-slate-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Nombre:</label>
+          <input type="text" id="perfil-nombre" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:border-cyan-400 focus:outline-none" />
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Peso (kg):</label>
+            <input type="number" id="perfil-peso" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-mono focus:border-cyan-400 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Altura (cm):</label>
+            <input type="number" id="perfil-altura" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-mono focus:border-cyan-400 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Cintura (cm):</label>
+            <input type="number" id="perfil-cintura" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-mono focus:border-cyan-400 focus:outline-none" />
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-2 pt-2">
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="cerrarModalPerfil()" class="py-2.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700">
+            Cancelar
+          </button>
+          <button onclick="guardarPerfilEditado()" class="py-2.5 bg-emerald-500 text-slate-950 text-xs font-bold rounded-xl active:bg-emerald-600 transition">
+            Actualizar
+          </button>
+        </div>
+        <button onclick="pedirCerrarSesion()" class="w-full py-2 bg-rose-500/10 text-rose-400 text-xs font-semibold rounded-xl border border-rose-500/20 active:scale-95 transition flex items-center justify-center gap-1.5">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i> Cambiar de Usuario
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DIÁLOGO -->
+  <div id="modal-dialogo" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xs p-5 space-y-4 shadow-2xl text-center">
+      <div id="dialogo-icono" class="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center"></div>
+      <div>
+        <h3 id="dialogo-titulo" class="font-bold text-white text-base">¿Estás seguro?</h3>
+        <p id="dialogo-mensaje" class="text-xs text-slate-400 mt-1 leading-relaxed"></p>
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button onclick="cerrarDialogo()" class="py-2.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700">
+          Cancelar
+        </button>
+        <button id="btn-dialogo-confirmar" class="py-2.5 text-xs font-bold rounded-xl transition">
+          Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST FLOTANTE -->
+  <div id="toast" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 bg-slate-900 border border-slate-700/80 px-4 py-3 rounded-2xl shadow-2xl transition-all duration-300 opacity-0 pointer-events-none translate-y-4">
+    <span id="toast-icono" class="text-emerald-400 flex items-center">
+      <i data-lucide="check" class="w-4 h-4"></i>
+    </span>
+    <span id="toast-texto" class="text-xs font-medium text-slate-100">Listo</span>
+  </div>
+
+  <script>
+    function actualizarIconos() {
+      try {
+        if (window.lucide) lucide.createIcons();
+      } catch (e) {
+        console.warn("Iconos:", e);
+      }
+    }
+    actualizarIconos();
+
+    // ================= 1. FIREBASE CONFIG =================
+    const firebaseConfig = {
+      apiKey: "AIzaSyCvO0zfTuqohtfd_-Fz8OknQtWLaJvktPg",
+      authDomain: "velotrack-app.firebaseapp.com",
+      projectId: "velotrack-app",
+      storageBucket: "velotrack-app.firebasestorage.app",
+      messagingSenderId: "244272892502",
+      appId: "1:244272892502:web:7d59d7e917b2bb04dc09f7"
+    };
+
+    let db = null;
+    try {
+      if (window.firebase) {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.firestore();
+      }
+    } catch (e) {
+      console.warn("Fallo al inicializar Firebase:", e);
+    }
+
+    // ================= 2. AUDIO & TONOS =================
+    let audioCtx = null;
+    let sonidoHabilitado = true;
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) audioCtx = new AudioContextClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function emitirBeep(tipo) {
+      if (!sonidoHabilitado) return;
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (tipo === 'preaviso') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, now);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } else if (tipo === 'cambio-firme') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(660, now + 0.15);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } else if (tipo === 'cambio-pique') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.setValueAtTime(1174, now + 0.1);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (tipo === 'cambio-suave') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(660, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.2);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (tipo === 'exito') {
+        [523.25, 659.25, 783.99].forEach((f, idx) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = f;
+          o.connect(g);
+          g.connect(ctx.destination);
+          g.gain.setValueAtTime(0.12, now + (idx * 0.08));
+          g.gain.exponentialRampToValueAtTime(0.001, now + (idx * 0.08) + 0.35);
+          o.start(now + (idx * 0.08));
+          o.stop(now + (idx * 0.08) + 0.35);
+        });
+      }
+    }
+
+    function toggleAudio() {
+      sonidoHabilitado = !sonidoHabilitado;
+      const btn = document.getElementById('btn-audio');
+      const icon = document.getElementById('icon-audio');
+
+      if (sonidoHabilitado) {
+        btn.classList.replace('text-slate-500', 'text-emerald-400');
+        icon.setAttribute('data-lucide', 'volume-2');
+        emitirBeep('cambio-suave');
+        mostrarToast("Alarmas sonoras activadas 🔊", "volume-2");
+      } else {
+        btn.classList.replace('text-emerald-400', 'text-slate-500');
+        icon.setAttribute('data-lucide', 'volume-x');
+        mostrarToast("Alarmas en silencio 🔇", "volume-x");
+      }
+      actualizarIconos();
+    }
+
+    // ================= 3. SVGs DINÁMICOS =================
+    const ICONOS_RITMO = {
+      suave: `
+        <svg class="w-12 h-12 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M8 12h8"/>
+          <path d="M12 8v8"/>
+        </svg>
+      `,
+      firme: `
+        <svg class="w-12 h-12 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+      `,
+      pique: `
+        <svg class="w-12 h-12 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+          <path d="M12 12v9"/>
+          <path d="m8 17 4 4 4-4"/>
+        </svg>
+      `
+    };
+
+    // ================= 4. PLANES & ESTADO =================
+    const PLANES = {
+      iniciado: [
+        { 
+          id: 0, nombre: "L", dia: "Lunes", tipo: "Adaptación Progresiva", minMeta: 25, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 300, ritmo: 'suave', rpm: 75, nombre: 'Calentamiento' },
+            { duracion: 600, ritmo: 'firme', rpm: 85, nombre: 'Ritmo Firme' },
+            { duracion: 45,  ritmo: 'pique', rpm: 100, nombre: 'Pique Rápido' },
+            { duracion: 555, ritmo: 'suave', rpm: 75, nombre: 'Vuelta a la Calma' }
+          ]
+        },
+        { 
+          id: 1, nombre: "M", dia: "Martes", tipo: "Intervalos Cortos", minMeta: 20, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 240, ritmo: 'suave', rpm: 75, nombre: 'Inicio Suave' },
+            { duracion: 360, ritmo: 'firme', rpm: 85, nombre: 'Subida Media' },
+            { duracion: 40,  ritmo: 'pique', rpm: 100, nombre: 'Aceleración' },
+            { duracion: 560, ritmo: 'suave', rpm: 75, nombre: 'Recuperación' }
+          ]
+        },
+        { 
+          id: 2, nombre: "M", dia: "Miércoles", tipo: "Descanso Muscular", minMeta: 0, completado: false, descanso: true, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: []
+        },
+        { 
+          id: 3, nombre: "J", dia: "Jueves", tipo: "Fondo Aeróbico", minMeta: 25, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 300, ritmo: 'suave', rpm: 75, nombre: 'Calentamiento' },
+            { duracion: 720, ritmo: 'firme', rpm: 85, nombre: 'Paso Constante' },
+            { duracion: 480, ritmo: 'suave', rpm: 75, nombre: 'Enfriamiento' }
+          ]
+        },
+        { 
+          id: 4, nombre: "V", dia: "Viernes", tipo: "Ritmo Firme y Pique", minMeta: 20, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 240, ritmo: 'suave', rpm: 75, nombre: 'Activación' },
+            { duracion: 400, ritmo: 'firme', rpm: 85, nombre: 'Carga Firme' },
+            { duracion: 45,  ritmo: 'pique', rpm: 100, nombre: 'Pique Final' },
+            { duracion: 515, ritmo: 'suave', rpm: 75, nombre: 'Soltar Piernas' }
+          ]
+        },
+        { 
+          id: 5, nombre: "S", dia: "Sábado", tipo: "Paseo Continuo", minMeta: 20, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 1200, ritmo: 'suave', rpm: 75, nombre: 'Pedaleo Relajado' }
+          ]
+        },
+        { 
+          id: 6, nombre: "D", dia: "Domingo", tipo: "Fondo Regenerativo", minMeta: 20, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 1200, ritmo: 'suave', rpm: 75, nombre: 'Pedaleo Regenerativo' }
+          ]
+        }
+      ],
+      constante: [
+        { 
+          id: 0, nombre: "L", dia: "Lunes", tipo: "Fondo y Resistencia", minMeta: 35, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 300, ritmo: 'suave', rpm: 75, nombre: 'Calentamiento' },
+            { duracion: 900, ritmo: 'firme', rpm: 85, nombre: 'Ritmo Fuerte' },
+            { duracion: 60,  ritmo: 'pique', rpm: 105, nombre: 'Pique Intenso' },
+            { duracion: 840, ritmo: 'suave', rpm: 75, nombre: 'Recuperación' }
+          ]
+        },
+        { 
+          id: 1, nombre: "M", dia: "Martes", tipo: "Intervalos Dobles", minMeta: 30, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 300, ritmo: 'suave', rpm: 75, nombre: 'Calentamiento' },
+            { duracion: 600, ritmo: 'firme', rpm: 85, nombre: 'Bloque Firme 1' },
+            { duracion: 45,  ritmo: 'pique', rpm: 100, nombre: 'Pique 1' },
+            { duracion: 500, ritmo: 'firme', rpm: 85, nombre: 'Bloque Firme 2' },
+            { duracion: 45,  ritmo: 'pique', rpm: 100, nombre: 'Pique 2' },
+            { duracion: 310, ritmo: 'suave', rpm: 75, nombre: 'Enfriamiento' }
+          ]
+        },
+        { 
+          id: 2, nombre: "M", dia: "Miércoles", tipo: "Recuperación Activa", minMeta: 20, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 1200, ritmo: 'suave', rpm: 75, nombre: 'Regenerativo' }
+          ]
+        },
+        { 
+          id: 3, nombre: "J", dia: "Jueves", tipo: "Fuerza Sostenida", minMeta: 35, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 300, ritmo: 'suave', rpm: 75, nombre: 'Calentamiento' },
+            { duracion: 1200, ritmo: 'firme', rpm: 85, nombre: 'Subida Sostenida' },
+            { duracion: 600, ritmo: 'suave', rpm: 75, nombre: 'Vuelta a la Calma' }
+          ]
+        },
+        { 
+          id: 4, nombre: "V", dia: "Viernes", tipo: "Piques Rápidos", minMeta: 25, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 300, ritmo: 'suave', rpm: 75, nombre: 'Inicio' },
+            { duracion: 600, ritmo: 'firme', rpm: 85, nombre: 'Carga Media' },
+            { duracion: 60,  ritmo: 'pique', rpm: 105, nombre: 'Pique a Fondo' },
+            { duracion: 540, ritmo: 'suave', rpm: 75, nombre: 'Enfriamiento' }
+          ]
+        },
+        { 
+          id: 5, nombre: "S", dia: "Sábado", tipo: "Fondo Libre", minMeta: 35, completado: false, descanso: false, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: [
+            { duracion: 2100, ritmo: 'suave', rpm: 80, nombre: 'Rodar Continuo' }
+          ]
+        },
+        { 
+          id: 6, nombre: "D", dia: "Domingo", tipo: "Descanso Total", minMeta: 0, completado: false, descanso: true, minHechos: 0, kmHechos: 0, calHechas: 0,
+          intervalos: []
+        }
+      ]
+    };
+
+    let perfilUsuario = JSON.parse(localStorage.getItem('velo_perfil_cloud')) || null;
+    let planSemanal = JSON.parse(localStorage.getItem('velo_plan_cloud')) || null;
+
+    // Obtener número de semana ISO para reiniciar lunes
+    function obtenerClaveSemanaActual() {
+      const fecha = new Date();
+      const d = new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()));
+      const diaNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - diaNum);
+      const inicioAno = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+      const semana = Math.ceil((((d - inicioAno) / 86400000) + 1)/7);
+      return `${d.getUTCFullYear()}-W${semana}`;
+    }
+
+    function obtenerDiaActualIndex() {
+      const d = new Date().getDay();
+      return (d + 6) % 7; // 0=Lunes, 6=Domingo
+    }
+
+    let diaSeleccionado = obtenerDiaActualIndex();
+
+    let timerRunning = false;
+    let segundosTotalesSesion = 0;
+    let duracionTotalRutina = 1500;
+    let intervalTimer = null;
+    let indiceIntervaloActual = 0;
+    let ritmoActual = 'suave';
+    let cadenciaActual = 75;
+
+    const CIRCLE_CIRCUMFERENCE = 276.46;
+    let preavisoEmitidoSegundos = -1;
+    let chartInstance = null;
+    let accionConfirmadaCallback = null;
+    let unsubscribeFirestore = null;
+
+    // ================= 5. COMPROBAR SESIÓN Y ROTACIÓN SEMANAL =================
+    function comprobarSesionUsuario() {
+      const pLogin = document.getElementById('pantalla-login');
+      const pApp = document.getElementById('pantalla-app');
+
+      if (!perfilUsuario) {
+        pLogin.classList.remove('hidden');
+        pApp.classList.add('hidden');
+      } else {
+        // Control de rotación automática semanal
+        const semanaGuardada = localStorage.getItem('velo_semana_activa');
+        const semanaActual = obtenerClaveSemanaActual();
+
+        if (semanaGuardada !== semanaActual) {
+          // Ha empezado una nueva semana: reiniciar el tablero semanal
+          planSemanal = JSON.parse(JSON.stringify(PLANES[perfilUsuario.nivel || 'iniciado']));
+          localStorage.setItem('velo_plan_cloud', JSON.stringify(planSemanal));
+          localStorage.setItem('velo_semana_activa', semanaActual);
+        } else if (!planSemanal) {
+          planSemanal = JSON.parse(JSON.stringify(PLANES[perfilUsuario.nivel || 'iniciado']));
+        }
+
+        diaSeleccionado = obtenerDiaActualIndex();
+        pLogin.classList.add('hidden');
+        pApp.classList.remove('hidden');
+        iniciarAppPrincipal();
+      }
+      actualizarIconos();
+    }
+
+    function completarRegistroInicial() {
+      const nom = document.getElementById('login-nombre').value.trim();
+      const peso = parseFloat(document.getElementById('login-peso').value);
+      const alt = parseFloat(document.getElementById('login-altura').value);
+      const cin = parseFloat(document.getElementById('login-cintura').value);
+
+      if (!nom) {
+        mostrarToast("Escribe tu nombre para personalizar", "alert-circle");
+        return;
+      }
+      if (!peso || peso <= 30) {
+        mostrarToast("Ingresa un peso válido", "alert-circle");
+        return;
+      }
+
+      perfilUsuario = {
+        nombre: nom,
+        peso: peso,
+        altura: alt || 170,
+        cintura: cin || 80,
+        nivel: 'iniciado',
+        metaMinutos: 110
+      };
+
+      planSemanal = JSON.parse(JSON.stringify(PLANES.iniciado));
+      localStorage.setItem('velo_perfil_cloud', JSON.stringify(perfilUsuario));
+      localStorage.setItem('velo_plan_cloud', JSON.stringify(planSemanal));
+      localStorage.setItem('velo_semana_activa', obtenerClaveSemanaActual());
+
+      diaSeleccionado = obtenerDiaActualIndex();
+      document.getElementById('pantalla-login').classList.add('hidden');
+      document.getElementById('pantalla-app').classList.remove('hidden');
+
+      iniciarAppPrincipal();
+      mostrarToast(`¡Bienvenido a la nube, ${nom}!`, "user-check");
+    }
+
+    function iniciarAppPrincipal() {
+      actualizarPerfilVisual();
+      cargarSecuenciaDia(diaSeleccionado);
+      renderizarTodo();
+      escucharHistorialFirestore();
+    }
+
+    function cargarSecuenciaDia(idx) {
+      const dia = planSemanal[idx];
+      indiceIntervaloActual = 0;
+      segundosTotalesSesion = 0;
+      preavisoEmitidoSegundos = -1;
+
+      const intervalos = (dia.intervalos && dia.intervalos.length > 0)
+        ? dia.intervalos
+        : [{ duracion: 1200, ritmo: 'suave', rpm: 75, nombre: 'Pedaleo Libre' }];
+
+      duracionTotalRutina = intervalos.reduce((acc, f) => acc + f.duracion, 0);
+
+      renderizarSegmentosEnRuta(intervalos, duracionTotalRutina);
+      aplicarIntervalo(intervalos[0], false);
+      actualizarDisplayReloj();
+      actualizarProgresoCirculo(0, intervalos[0].duracion);
+      actualizarCiclistaRuta(0, duracionTotalRutina);
+    }
+
+    function renderizarSegmentosEnRuta(intervalos, totalSeg) {
+      const cont = document.getElementById('segmentos-etapas-fondo');
+      const leyenda = document.getElementById('leyenda-etapas-marcas');
+      cont.innerHTML = '';
+      leyenda.innerHTML = '';
+
+      intervalos.forEach((fase) => {
+        const pct = ((fase.duracion / totalSeg) * 100).toFixed(2);
+        let bg = 'bg-emerald-500/70';
+        if (fase.ritmo === 'firme') bg = 'bg-amber-500/70';
+        else if (fase.ritmo === 'pique') bg = 'bg-rose-500/80';
+
+        const segDiv = document.createElement('div');
+        segDiv.style.width = pct + '%';
+        segDiv.className = `h-full ${bg} border-r border-slate-950/60 first:rounded-l-full last:rounded-r-full`;
+        cont.appendChild(segDiv);
+      });
+
+      const mTotal = Math.round(totalSeg / 60);
+      leyenda.innerHTML = `<span>0m</span><span>Meta: ${mTotal}m</span>`;
+    }
+
+    function aplicarIntervalo(fase, conSonido = true) {
+      ritmoActual = fase.ritmo;
+      cadenciaActual = fase.rpm;
+
+      const contIlustracion = document.getElementById('contenedor-ilustracion');
+      const sensacion = document.getElementById('lbl-sensacion');
+      const progressBar = document.getElementById('circle-progress-bar');
+      const lblRPM = document.getElementById('lbl-rpm');
+
+      lblRPM.innerText = cadenciaActual;
+
+      contIlustracion.classList.remove('fade-in');
+      contIlustracion.classList.add('fade-out');
+
+      setTimeout(() => {
+        if (fase.ritmo === 'suave') {
+          contIlustracion.innerHTML = ICONOS_RITMO.suave;
+          sensacion.innerText = `${fase.nombre} (Suave)`;
+          sensacion.className = "text-[11px] text-emerald-400 mt-1 font-medium";
+          progressBar.setAttribute('stroke', '#34d399');
+        } else if (fase.ritmo === 'firme') {
+          contIlustracion.innerHTML = ICONOS_RITMO.firme;
+          sensacion.innerText = `${fase.nombre} (Firme)`;
+          sensacion.className = "text-[11px] text-amber-400 mt-1 font-medium";
+          progressBar.setAttribute('stroke', '#fbbf24');
+        } else if (fase.ritmo === 'pique') {
+          contIlustracion.innerHTML = ICONOS_RITMO.pique;
+          sensacion.innerText = `¡${fase.nombre}! (Acelera)`;
+          sensacion.className = "text-[11px] text-rose-400 mt-1 font-bold";
+          progressBar.setAttribute('stroke', '#f43f5e');
+        }
+
+        contIlustracion.classList.remove('fade-out');
+        contIlustracion.classList.add('fade-in');
+      }, 250);
+
+      if (conSonido) {
+        if (fase.ritmo === 'pique') emitirBeep('cambio-pique');
+        else if (fase.ritmo === 'firme') emitirBeep('cambio-firme');
+        else emitirBeep('cambio-suave');
+      }
+    }
+
+    // ================= 6. CRONÓMETRO =================
+    function toggleTimer() {
+      const btn = document.getElementById('btn-toggle');
+      const text = document.getElementById('text-toggle');
+
+      if (!timerRunning) {
+        timerRunning = true;
+        text.innerText = "PAUSAR";
+        btn.classList.replace('bg-emerald-500', 'bg-amber-500');
+        emitirBeep('cambio-suave');
+
+        intervalTimer = setInterval(() => {
+          segundosTotalesSesion++;
+          procesarPasoTiempoAutomatico();
+        }, 1000);
+      } else {
+        timerRunning = false;
+        text.innerText = "CONTINUAR";
+        btn.classList.replace('bg-amber-500', 'bg-emerald-500');
+        clearInterval(intervalTimer);
+      }
+      verificarBotonCancelar();
+      actualizarIconos();
+    }
+
+    function procesarPasoTiempoAutomatico() {
+      const dia = planSemanal[diaSeleccionado];
+      const intervalos = (dia.intervalos && dia.intervalos.length > 0) 
+        ? dia.intervalos 
+        : [{ duracion: 1800, ritmo: 'suave', rpm: 75, nombre: 'Pedaleo Libre' }];
+
+      let acumSegundos = 0;
+      let intervaloActualEncontrado = 0;
+      let segundosDentroDelIntervalo = 0;
+
+      for (let i = 0; i < intervalos.length; i++) {
+        const dur = intervalos[i].duracion;
+        if (segundosTotalesSesion < acumSegundos + dur) {
+          intervaloActualEncontrado = i;
+          segundosDentroDelIntervalo = segundosTotalesSesion - acumSegundos;
+          break;
+        }
+        acumSegundos += dur;
+        if (i === intervalos.length - 1) {
+          intervaloActualEncontrado = i;
+          segundosDentroDelIntervalo = dur;
+        }
+      }
+
+      if (intervaloActualEncontrado !== indiceIntervaloActual) {
+        indiceIntervaloActual = intervaloActualEncontrado;
+        aplicarIntervalo(intervalos[indiceIntervaloActual], true);
+        mostrarToast(`Fase iniciada: ${intervalos[indiceIntervaloActual].nombre}`, "activity");
+      }
+
+      const fActual = intervalos[indiceIntervaloActual];
+      const tiempoRestanteEnFase = fActual.duracion - segundosDentroDelIntervalo;
+
+      if (tiempoRestanteEnFase <= 5 && tiempoRestanteEnFase > 0 && indiceIntervaloActual < intervalos.length - 1) {
+        if (preavisoEmitidoSegundos !== tiempoRestanteEnFase) {
+          preavisoEmitidoSegundos = tiempoRestanteEnFase;
+          emitirBeep('preaviso');
+        }
+      }
+
+      const boxSiguiente = document.getElementById('lbl-siguiente-info');
+      const lblBloque = document.getElementById('lbl-bloque-num');
+      lblBloque.innerText = `Fase ${indiceIntervaloActual + 1}/${intervalos.length}`;
+
+      if (indiceIntervaloActual < intervalos.length - 1) {
+        const prox = intervalos[indiceIntervaloActual + 1];
+        const m = Math.floor(tiempoRestanteEnFase / 60);
+        const s = String(tiempoRestanteEnFase % 60).padStart(2, '0');
+        boxSiguiente.innerText = `${prox.nombre} (en ${m}:${s})`;
+      } else {
+        boxSiguiente.innerText = "¡Última etapa del recorrido!";
+      }
+
+      actualizarProgresoCirculo(segundosDentroDelIntervalo, fActual.duracion);
+      actualizarCiclistaRuta(segundosTotalesSesion, duracionTotalRutina);
+      actualizarDisplayReloj();
+    }
+
+    function actualizarProgresoCirculo(actual, total) {
+      const progressBar = document.getElementById('circle-progress-bar');
+      const fraccion = Math.min(1, actual / total);
+      const offset = CIRCLE_CIRCUMFERENCE - (fraccion * CIRCLE_CIRCUMFERENCE);
+      progressBar.style.strokeDashoffset = offset;
+    }
+
+    function actualizarCiclistaRuta(actual, total) {
+      const pct = Math.min(100, Math.round((actual / total) * 100));
+      document.getElementById('lbl-pct-total').innerText = `${pct}%`;
+
+      const ciclista = document.getElementById('ciclista-icono');
+      const fillBar = document.getElementById('fill-recorrido-total');
+
+      ciclista.style.left = `${pct}%`;
+      fillBar.style.width = `${pct}%`;
+    }
+
+    function actualizarDisplayReloj() {
+      const m = String(Math.floor(segundosTotalesSesion / 60)).padStart(2, '0');
+      const s = String(segundosTotalesSesion % 60).padStart(2, '0');
+      document.getElementById('timer-display').innerText = `${m}:${s}`;
+    }
+
+    function verificarBotonCancelar() {
+      const btn = document.getElementById('btn-cancelar');
+      if (segundosTotalesSesion > 0 || timerRunning) btn.classList.remove('hidden');
+      else btn.classList.add('hidden');
+    }
+
+    function pedirConfirmacionCancelar() {
+      abrirDialogo({
+        titulo: "Descartar sesión",
+        mensaje: "¿Deseas volver el reloj a 00:00 y reiniciar la secuencia de hoy?",
+        icono: "rotate-ccw",
+        colorClase: "bg-rose-500/10 text-rose-400 border border-rose-500/20",
+        btnTexto: "Descartar",
+        btnClase: "bg-rose-500 text-white",
+        onConfirm: () => {
+          if (timerRunning) toggleTimer();
+          cargarSecuenciaDia(diaSeleccionado);
+          document.getElementById('text-toggle').innerText = "INICIAR SESIÓN";
+          verificarBotonCancelar();
+          mostrarToast("Sesión reiniciada", "rotate-ccw");
+        }
+      });
+    }
+
+    // ================= 7. GUARDAR CON FIRESTORE =================
+    function abrirModalGuardar() {
+      if (timerRunning) toggleTimer();
+
+      const minEst = Math.max(1, Math.round(segundosTotalesSesion / 60));
+      const peso = (perfilUsuario && perfilUsuario.peso) ? perfilUsuario.peso : 75;
+      const calEst = Math.round(6.8 * peso * (minEst / 60));
+      const kmEst = (minEst * 0.42).toFixed(1);
+
+      document.getElementById('input-modal-min').value = minEst;
+      document.getElementById('input-modal-km').value = kmEst;
+      document.getElementById('input-modal-cal').value = calEst;
+
+      document.getElementById('modal-guardar').classList.remove('hidden');
+      actualizarIconos();
+    }
+
+    function cerrarModalGuardar() {
+      document.getElementById('modal-guardar').classList.add('hidden');
+    }
+
+    function confirmarGuardado() {
+      const minVal = parseInt(document.getElementById('input-modal-min').value) || 1;
+      const kmVal = parseFloat(document.getElementById('input-modal-km').value) || 0.4;
+      const calVal = parseInt(document.getElementById('input-modal-cal').value) || 10;
+
+      const d = planSemanal[diaSeleccionado];
+      d.completado = true;
+      d.descanso = false;
+      d.minHechos = (d.minHechos || 0) + minVal;
+      d.kmHechos = (d.kmHechos || 0) + kmVal;
+      d.calHechas = (d.calHechas || 0) + calVal;
+
+      cargarSecuenciaDia(diaSeleccionado);
+      document.getElementById('text-toggle').innerText = "INICIAR SESIÓN";
+      cerrarModalGuardar();
+      verificarBotonCancelar();
+      guardarLocal();
+      emitirBeep('exito');
+
+      // Guardar en Firestore con la fecha exacta del momento
+      if (db) {
+        const ahora = new Date();
+        const datosDoc = {
+          usuario: perfilUsuario.nombre,
+          fechaISO: ahora.toISOString(),
+          fechaTexto: ahora.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+          semana: obtenerClaveSemanaActual(),
+          dia: d.dia,
+          tipoRutina: d.tipo,
+          minutos: minVal,
+          kilometros: kmVal,
+          calorias: calVal,
+          nivel: perfilUsuario.nivel || 'iniciado'
+        };
+
+        db.collection("sesiones_bici").add(datosDoc)
+          .then(() => {
+            mostrarToast("¡Guardado en Firebase Cloud con éxito! ☁️", "check");
+            escucharHistorialFirestore();
+          })
+          .catch((err) => {
+            console.error("Error guardando en Firestore:", err);
+            mostrarToast("Error Firebase: " + err.message, "alert-triangle");
+          });
+      } else {
+        mostrarToast(`¡Sesión guardada localmente! +${minVal} min`, "check");
+      }
+    }
+
+    // ================= 8. LECTURA INMEDIATA + TIEMPO REAL =================
+    function escucharHistorialFirestore() {
+      const cont = document.getElementById('lista-firestore');
+      const estadoConexion = document.getElementById('estado-conexion-cloud');
+
+      if (!db || !perfilUsuario) {
+        cont.innerHTML = `<span class="text-slate-500 italic text-[11px]">Esperando inicialización de Firebase...</span>`;
+        if (estadoConexion) estadoConexion.innerText = "Sin conexión";
+        return;
+      }
+
+      function renderizarSnap(snapshot) {
+        if (estadoConexion) {
+          estadoConexion.innerText = "Conectado";
+          estadoConexion.className = "text-[10px] text-emerald-400 font-mono";
+        }
+
+        if (snapshot.empty) {
+          cont.innerHTML = `<span class="text-slate-500 italic text-[11px]">No hay sesiones en la nube aún. ¡Completa tu primer pedaleo!</span>`;
+          return;
+        }
+
+        cont.innerHTML = '';
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const fila = document.createElement('div');
+          fila.className = "flex justify-between items-center bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 mb-1";
+          fila.innerHTML = `
+            <div>
+              <span class="font-bold text-slate-200">${data.dia || 'Día'}: ${data.tipoRutina || 'Sesión'}</span>
+              <span class="text-[10px] text-slate-500 block">${data.fechaTexto || 'Reciente'}</span>
+            </div>
+            <div class="text-right font-mono">
+              <span class="text-cyan-400 font-bold">${data.minutos || 0} min</span>
+              <span class="text-emerald-400 text-[10px] block">${(data.kilometros || 0)} km · ${(data.calorias || 0)} kcal</span>
+            </div>
+          `;
+          cont.appendChild(fila);
+        });
+      }
+
+      // Lectura directa inicial
+      db.collection("sesiones_bici").limit(10).get()
+        .then((snap) => renderizarSnap(snap))
+        .catch((err) => console.warn("Lectura inicial:", err));
+
+      // Escucha activa de cambios
+      if (unsubscribeFirestore) unsubscribeFirestore();
+      unsubscribeFirestore = db.collection("sesiones_bici").limit(10).onSnapshot(
+        (snapshot) => renderizarSnap(snapshot),
+        (err) => {
+          console.error("Error Snapshot:", err);
+          if (estadoConexion) {
+            estadoConexion.innerText = "Error conexión";
+            estadoConexion.className = "text-[10px] text-rose-400 font-mono";
+          }
+        }
+      );
+    }
+
+    function alternarDescanso() {
+      const d = planSemanal[diaSeleccionado];
+      d.descanso = !d.descanso;
+      d.completado = d.descanso || (d.minHechos > 0);
+      guardarLocal();
+      mostrarToast(d.descanso ? `${d.dia}: Descanso asignado 💤` : `${d.dia}: Listo para pedalear`, "coffee");
+    }
+
+    function guardarLocal() {
+      localStorage.setItem('velo_plan_cloud', JSON.stringify(planSemanal));
+      renderizarTodo();
+    }
+
+    function renderizarTodo() {
+      renderizarKPIs();
+      renderizarDias();
+      mostrarDetalleDia(diaSeleccionado);
+      verificarBotonCancelar();
+      evaluarEvolucion();
+      if (!document.getElementById('vista-estadisticas').classList.contains('hidden')) {
+        renderizarGrafico();
+      }
+      actualizarIconos();
+    }
+
+    function renderizarKPIs() {
+      const minTotales = planSemanal.reduce((acc, d) => acc + (d.minHechos || 0), 0);
+      const kmTotales = planSemanal.reduce((acc, d) => acc + (d.kmHechos || 0), 0);
+      const calTotales = planSemanal.reduce((acc, d) => acc + (d.calHechas || 0), 0);
+
+      document.getElementById('kpi-min').innerText = minTotales;
+      document.getElementById('kpi-km').innerText = kmTotales.toFixed(1);
+      document.getElementById('kpi-cal').innerText = calTotales;
+
+      const meta = (perfilUsuario && perfilUsuario.metaMinutos) ? perfilUsuario.metaMinutos : 110;
+      const pct = Math.min(100, Math.round((minTotales / meta) * 100));
+      document.getElementById('prog-min').style.width = pct + '%';
+      document.getElementById('prog-km').style.width = Math.min(100, (kmTotales / 50) * 100) + '%';
+      document.getElementById('prog-cal').style.width = Math.min(100, (calTotales / 1000) * 100) + '%';
+    }
+
+    function renderizarDias() {
+      const cont = document.getElementById('dias-contenedor');
+      cont.innerHTML = '';
+
+      planSemanal.forEach((dia, idx) => {
+        const isSelected = diaSeleccionado === idx;
+        const btn = document.createElement('button');
+        btn.onclick = () => { 
+          if (timerRunning) {
+            mostrarToast("Pausa la sesión activa antes de cambiar de día", "alert-circle");
+            return;
+          }
+          diaSeleccionado = idx; 
+          cargarSecuenciaDia(idx);
+          renderizarTodo(); 
+        };
+        
+        let clases = 'bg-slate-900 border-slate-800 text-slate-400';
+        if (isSelected) {
+          clases = 'bg-emerald-500/20 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400';
+        } else if (dia.descanso) {
+          clases = 'bg-slate-800/40 border-slate-700/50 text-slate-500';
+        } else if (dia.completado) {
+          clases = 'bg-emerald-950/40 border-emerald-800 text-emerald-400';
+        }
+
+        btn.className = `p-2 rounded-xl flex flex-col items-center justify-center transition border ${clases}`;
+        let sub = dia.minMeta + 'm';
+        if (dia.descanso) sub = '💤';
+        else if (dia.completado) sub = '✓';
+
+        btn.innerHTML = `<span class="text-xs font-bold">${dia.nombre}</span><span class="text-[9px] mt-1 font-mono">${sub}</span>`;
+        cont.appendChild(btn);
+      });
+    }
+
+    function mostrarDetalleDia(idx) {
+      const d = planSemanal[idx];
+      document.getElementById('det-titulo').innerText = `${d.dia}: ${d.tipo}`;
+      document.getElementById('det-desc').innerText = d.descanso ? 'Día de descanso muscular total.' : `Rutina guiada de ${d.minMeta} minutos.`;
+
+      document.getElementById('det-hecho-min').innerText = `${d.minHechos || 0} min`;
+      document.getElementById('det-hecho-km').innerText = `${(d.kmHechos || 0).toFixed(1)} km`;
+      document.getElementById('det-hecho-cal').innerText = `${d.calHechas || 0} kcal`;
+
+      const contSecuencia = document.getElementById('det-secuencia-fases');
+      contSecuencia.innerHTML = '';
+
+      if (d.intervalos && d.intervalos.length > 0) {
+        d.intervalos.forEach((fase) => {
+          const m = Math.floor(fase.duracion / 60);
+          const s = fase.duracion % 60;
+          const durTxt = m > 0 ? `${m}m ${s > 0 ? s + 's' : ''}` : `${s}s`;
+          const badgeColor = fase.ritmo === 'suave' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-950/40' : (fase.ritmo === 'firme' ? 'text-amber-400 border-amber-500/30 bg-amber-950/40' : 'text-rose-400 border-rose-500/30 bg-rose-950/40');
+
+          const div = document.createElement('div');
+          div.className = "flex items-center justify-between p-2 rounded-xl bg-slate-950 border border-slate-800/80";
+          div.innerHTML = `
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-mono px-1.5 py-0.5 rounded border ${badgeColor}">${fase.ritmo.toUpperCase()}</span>
+              <span class="font-medium text-slate-200">${fase.nombre}</span>
+            </div>
+            <span class="font-mono text-slate-400">${durTxt}</span>
+          `;
+          contSecuencia.appendChild(div);
+        });
+      } else {
+        contSecuencia.innerHTML = `<span class="text-xs text-slate-500 italic">Día de recuperación, sin intervalos programados.</span>`;
+      }
+
+      const st = document.getElementById('det-estado');
+      const btnDescanso = document.getElementById('lbl-btn-descanso');
+
+      if (d.descanso) {
+        st.className = "text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700";
+        st.innerText = "Descanso";
+        btnDescanso.innerText = "Quitar descanso";
+      } else if (d.completado) {
+        st.className = "text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800";
+        st.innerText = "Completado";
+        btnDescanso.innerText = "Marcar como Descanso";
+      } else {
+        st.className = "text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-950/60 text-amber-400 border border-amber-800/80";
+        st.innerText = "Pendiente";
+        btnDescanso.innerText = "Marcar como Descanso";
+      }
+    }
+
+    function evaluarEvolucion() {
+      const minTotales = planSemanal.reduce((acc, d) => acc + (d.minHechos || 0), 0);
+      const meta = perfilUsuario.metaMinutos || 110;
+      const pct = Math.round((minTotales / meta) * 100);
+
+      const estadoTxt = document.getElementById('txt-estado-evolucion');
+      const msgTxt = document.getElementById('msg-evolucion');
+      const btnAscender = document.getElementById('btn-ascender');
+
+      if (perfilUsuario.nivel === 'iniciado') {
+        if (pct >= 85) {
+          estadoTxt.innerText = "¡Adaptación Superada con Éxito! 🏆";
+          estadoTxt.className = "text-[11px] text-amber-400 font-bold";
+          msgTxt.innerText = "Tus piernas y respiración ya toleran el pedaleo sin problemas. Tu cuerpo está listo para sesiones de 35 minutos con mayor quema calórica.";
+          btnAscender.classList.remove('hidden');
+        } else {
+          estadoTxt.innerText = `Fase de Adaptación (${pct}% alcanzado)`;
+          estadoTxt.className = "text-[11px] text-slate-400";
+          msgTxt.innerText = "Alcanza al menos el 85% de tu meta semanal para que el sistema active tu siguiente plan de resistencia.";
+          btnAscender.classList.add('hidden');
+        }
+      } else {
+        estadoTxt.innerText = "Nivel 2: Constante Activo 💪";
+        estadoTxt.className = "text-[11px] text-emerald-400 font-bold";
+        msgTxt.innerText = "Estás en el nivel óptimo de acondicionamiento físico. Mantén este ritmo para preservar tu masa muscular y salud cardiovascular.";
+        btnAscender.classList.add('hidden');
+      }
+    }
+
+    function ascenderNivel() {
+      perfilUsuario.nivel = 'constante';
+      perfilUsuario.metaMinutos = 160;
+      planSemanal = JSON.parse(JSON.stringify(PLANES.constante));
+
+      localStorage.setItem('velo_perfil_cloud', JSON.stringify(perfilUsuario));
+      localStorage.setItem('velo_plan_cloud', JSON.stringify(planSemanal));
+
+      emitirBeep('exito');
+      actualizarPerfilVisual();
+      cargarSecuenciaDia(obtenerDiaActualIndex());
+      renderizarTodo();
+      mostrarToast("¡Felicidades! Subiste a Nivel 2: Constante 🚀", "award");
+    }
+
+    function pedirConfirmacionReset() {
+      abrirDialogo({
+        titulo: "Reiniciar Semana",
+        mensaje: "¿Seguro que deseas poner en cero el avance de todos los días de esta semana?",
+        icono: "refresh-cw",
+        colorClase: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+        btnTexto: "Reiniciar",
+        btnClase: "bg-amber-500 text-slate-950 font-bold",
+        onConfirm: () => {
+          planSemanal = JSON.parse(JSON.stringify(PLANES[perfilUsuario.nivel || 'iniciado']));
+          cargarSecuenciaDia(diaSeleccionado);
+          guardarLocal();
+          mostrarToast("Semana reiniciada en cero", "refresh-cw");
+        }
+      });
+    }
+
+    function renderizarGrafico() {
+      const ctx = document.getElementById('chartProgreso').getContext('2d');
+      const labels = planSemanal.map(d => d.nombre);
+      const dataMeta = planSemanal.map(d => d.minMeta);
+      const dataReal = planSemanal.map(d => d.minHechos);
+
+      if (chartInstance) chartInstance.destroy();
+
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Real (min)', data: dataReal, backgroundColor: 'rgba(52, 211, 153, 0.85)', borderRadius: 6 },
+            { label: 'Meta (min)', data: dataMeta, backgroundColor: 'rgba(51, 65, 85, 0.7)', borderRadius: 6 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { color: '#94a3b8' } },
+            x: { grid: { display: false }, ticks: { color: '#cbd5e1' } }
+          }
+        }
+      });
+    }
+
+    function cambiarPestana(tab) {
+      const vEntrenar = document.getElementById('vista-entrenar');
+      const vEstadisticas = document.getElementById('vista-estadisticas');
+      const btnEntrenar = document.getElementById('tab-btn-entrenar');
+      const btnEstadisticas = document.getElementById('tab-btn-estadisticas');
+
+      if (tab === 'entrenar') {
+        vEntrenar.classList.remove('hidden');
+        vEstadisticas.classList.add('hidden');
+        btnEntrenar.classList.replace('text-slate-400', 'text-cyan-400');
+        btnEstadisticas.classList.replace('text-cyan-400', 'text-slate-400');
+      } else {
+        vEntrenar.classList.add('hidden');
+        vEstadisticas.classList.remove('hidden');
+        btnEstadisticas.classList.replace('text-slate-400', 'text-cyan-400');
+        btnEntrenar.classList.replace('text-cyan-400', 'text-slate-400');
+        renderizarGrafico();
+        escucharHistorialFirestore();
+      }
+      actualizarIconos();
+    }
+
+    function abrirModalPerfil() {
+      document.getElementById('perfil-nombre').value = perfilUsuario.nombre;
+      document.getElementById('perfil-peso').value = perfilUsuario.peso;
+      document.getElementById('perfil-altura').value = perfilUsuario.altura;
+      document.getElementById('perfil-cintura').value = perfilUsuario.cintura;
+      document.getElementById('modal-perfil').classList.remove('hidden');
+      actualizarIconos();
+    }
+
+    function cerrarModalPerfil() {
+      document.getElementById('modal-perfil').classList.add('hidden');
+    }
+
+    function guardarPerfilEditado() {
+      perfilUsuario.nombre = document.getElementById('perfil-nombre').value.trim() || 'Ciclista';
+      perfilUsuario.peso = parseFloat(document.getElementById('perfil-peso').value) || 75;
+      perfilUsuario.altura = parseFloat(document.getElementById('perfil-altura').value) || 170;
+      perfilUsuario.cintura = parseFloat(document.getElementById('perfil-cintura').value) || 80;
+
+      localStorage.setItem('velo_perfil_cloud', JSON.stringify(perfilUsuario));
+      actualizarPerfilVisual();
+      cerrarModalPerfil();
+      renderizarTodo();
+      mostrarToast("Perfil actualizado", "check");
+    }
+
+    function pedirCerrarSesion() {
+      cerrarModalPerfil();
+      abrirDialogo({
+        titulo: "Cambiar de Usuario",
+        mensaje: "¿Deseas cerrar tu sesión actual para registrar a otra persona?",
+        icono: "log-out",
+        colorClase: "bg-rose-500/10 text-rose-400 border border-rose-500/20",
+        btnTexto: "Cerrar Sesión",
+        btnClase: "bg-rose-500 text-white",
+        onConfirm: () => {
+          localStorage.removeItem('velo_perfil_cloud');
+          localStorage.removeItem('velo_plan_cloud');
+          perfilUsuario = null;
+          planSemanal = null;
+          comprobarSesionUsuario();
+          mostrarToast("Sesión cerrada", "log-out");
+        }
+      });
+    }
+
+    function actualizarPerfilVisual() {
+      document.getElementById('header-user-badge').innerText = `Hola, ${perfilUsuario.nombre}`;
+      document.getElementById('kpi-meta-min').innerText = `/ ${perfilUsuario.metaMinutos}`;
+      document.getElementById('stat-perfil-nombre').innerText = `${perfilUsuario.nombre} (${perfilUsuario.peso} kg)`;
+
+      if (perfilUsuario.cintura && perfilUsuario.altura) {
+        const ratio = (perfilUsuario.cintura / perfilUsuario.altura).toFixed(2);
+        const ratioTxt = document.getElementById('stat-ratio-cintura');
+        if (ratio < 0.50) {
+          ratioTxt.innerText = `${ratio} (Excelente - Riesgo Bajo)`;
+          ratioTxt.className = "font-mono font-bold text-emerald-400";
+        } else {
+          ratioTxt.innerText = `${ratio} (> 0.50 Moderado)`;
+          ratioTxt.className = "font-mono font-bold text-amber-400";
+        }
+      }
+
+      evaluarEvolucion();
+    }
+
+    function abrirGuia() {
+      mostrarToast("Auto-Pilot cambia las fases por ti.", "help-circle");
+    }
+
+    function abrirDialogo({ titulo, mensaje, icono, colorClase, btnTexto, btnClase, onConfirm }) {
+      const modal = document.getElementById('modal-dialogo');
+      document.getElementById('dialogo-titulo').innerText = titulo;
+      document.getElementById('dialogo-mensaje').innerText = mensaje;
+      
+      const contIcono = document.getElementById('dialogo-icono');
+      contIcono.className = `w-12 h-12 rounded-2xl mx-auto flex items-center justify-center ${colorClase}`;
+      contIcono.innerHTML = `<i data-lucide="${icono}" class="w-6 h-6"></i>`;
+
+      const btnConfirmar = document.getElementById('btn-dialogo-confirmar');
+      btnConfirmar.innerText = btnTexto;
+      btnConfirmar.className = `py-2.5 text-xs font-bold rounded-xl active:scale-95 transition ${btnClase}`;
+
+      accionConfirmadaCallback = onConfirm;
+      btnConfirmar.onclick = () => {
+        if (accionConfirmadaCallback) accionConfirmadaCallback();
+        cerrarDialogo();
+      };
+
+      modal.classList.remove('hidden');
+      actualizarIconos();
+    }
+
+    function cerrarDialogo() {
+      document.getElementById('modal-dialogo').classList.add('hidden');
+      accionConfirmadaCallback = null;
+    }
+
+    let toastTimeout = null;
+    function mostrarToast(mensaje, iconName = 'check') {
+      const toast = document.getElementById('toast');
+      const iconoSpan = document.getElementById('toast-icono');
+      const textoSpan = document.getElementById('toast-texto');
+
+      iconoSpan.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4"></i>`;
+      textoSpan.innerText = mensaje;
+      actualizarIconos();
+
+      toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+      }, 2500);
+    }
+
+    // Arranque
+    comprobarSesionUsuario();
+  </script>
+</body>
+</html>
